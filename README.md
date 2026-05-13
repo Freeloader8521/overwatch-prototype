@@ -1,38 +1,34 @@
 
-# Overwatch Streamlit Prototype v6
+# Overwatch Streamlit Prototype v8
 
-This version rebuilds the map with Plotly rather than PyDeck to improve reliability on Streamlit.
+## Changes
 
-## Included
+- Removed MIDB points counter from Monitor.
+- Removed temporary locations counter from Monitor.
+- Moved Selected Event beneath Events Workflow in the left column.
+- Improved map markers using icon-style labels:
+  - ✈ Airports
+  - ⚓ Ports
+  - ▣ Diplomatic outposts
+  - ◇ Border crossings
+  - ✚ Hospitals
+  - 🏢 Offices
+  - ▲ Travelling staff
+  - ◆ Temporary locations
+- Added operational records tabs below the map:
+  - All events
+  - Temporary locations
+  - Monitored moves
+- Added operator-generated event example.
+- Kept draft distribution email.
 
-- Overwatch Pulse
-- Overwatch Monitor
-- Overwatch Risk
-- Plotly global map
-- Office locations
-- Temporary locations
-- Travelling staff locations
-- MIDB-style reference layers:
-  - Airports
-  - Diplomatic outposts
-  - Border crossings
-  - Ports
-  - Hospitals
-- Temporary location management panel
-- AI-generated and internal event workflow
-- Published Pulse view
+## Note on map zoom from table clicks
 
-## Run locally
+Streamlit table row selection is included. Depending on Streamlit version, selecting a row may require a rerun to reflect map focus. This is enough for prototype discussion, but a production version would use a proper stateful map component.
+
+## Run
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
-
-## Deploy
-
-Upload these files to GitHub and Streamlit should redeploy automatically:
-
-- app.py
-- requirements.txt
-- README.md
