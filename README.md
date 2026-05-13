@@ -1,17 +1,22 @@
 
 # Overwatch Streamlit Prototype
 
-Prototype v3 for Overwatch.
+Prototype v4.
 
 ## Key changes
 
-- Pulse renamed to **Live Common Intelligence Picture**
-- Pulse only shows operator-approved/published items
-- Monitor now shows AI-generated events in an operator workflow
-- Red / Amber / Inform / Discard classification model moved to a small hover key in the sidebar
-- Low contrast and high contrast display modes
-- Map style no longer depends on a Mapbox token, improving Streamlit deployment reliability
-- Dark blue high-tech Pulse styling
+- Pulse reduced to three main cards:
+  - Active Risks
+  - Monitored Moves
+  - Published Updates
+- Pulse map now has toggles for:
+  - pulsing active risks
+  - pulsing monitored moves
+- Monitored moves are distinct from active risks
+- Published updates show last 72 hours, split into Red / Amber / Inform
+- Discarded items are not shown on Pulse
+- Live risks ticker added beneath the hero panel
+- Monitor retains AI-generated events workflow
 
 ## Run locally
 

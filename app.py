@@ -31,6 +31,7 @@ EVENTS = [
         "summary": "Multiple reports indicate escalating protest activity near a commercial district. One office location and three monitored staff movements are within the likely impact area.",
         "ai_reason": "Security event within 1000m of a fixed exposure and overlapping with monitored movements. AI recommends Red.",
         "published": True,
+        "published_hours_ago": 1,
         "time": "11 mins ago",
     },
     {
@@ -50,6 +51,7 @@ EVENTS = [
         "summary": "Departures are delayed following a security screening disruption. Two staff travellers are scheduled to transit through IST within the next 18 hours.",
         "ai_reason": "Travel disruption at an airport with staff movement during the affected time window. AI recommends Amber.",
         "published": False,
+        "published_hours_ago": None,
         "time": "24 mins ago",
     },
     {
@@ -69,6 +71,7 @@ EVENTS = [
         "summary": "A severe storm warning has been issued for the region. One temporary project location may experience travel disruption and localised flooding.",
         "ai_reason": "Environmental event overlaps with a temporary location. AI recommends Amber pending operator validation.",
         "published": False,
+        "published_hours_ago": None,
         "time": "48 mins ago",
     },
     {
@@ -88,7 +91,48 @@ EVENTS = [
         "summary": "A planned demonstration has been announced. No offices, staff accommodation, temporary locations or monitored movements are currently assessed as exposed.",
         "ai_reason": "Relevant regional awareness but no current corporate exposure. AI recommends Inform.",
         "published": True,
+        "published_hours_ago": 9,
         "time": "1 hr ago",
+    },
+    {
+        "id": "EVT-2406",
+        "title": "Airport strike disruption likely to affect departures",
+        "city": "Madrid",
+        "country": "Spain",
+        "lat": 40.4983,
+        "lon": -3.5676,
+        "type": "Travel",
+        "ai_classification": "Amber",
+        "operator_classification": "Amber",
+        "operator_status": "Published",
+        "confidence": "High",
+        "source": "Aviation disruption feed",
+        "exposure": "Monitored movement through MAD",
+        "summary": "Industrial action is expected to cause delays at Madrid Barajas. One monitored movement may be affected within the next 24 hours.",
+        "ai_reason": "Travel disruption overlaps with monitored movement at MAD. AI recommends Amber.",
+        "published": True,
+        "published_hours_ago": 22,
+        "time": "22 hrs ago",
+    },
+    {
+        "id": "EVT-2407",
+        "title": "Medical facility disruption reported",
+        "city": "Lima",
+        "country": "Peru",
+        "lat": -12.0464,
+        "lon": -77.0428,
+        "type": "Medical",
+        "ai_classification": "Inform",
+        "operator_classification": "Inform",
+        "operator_status": "Published",
+        "confidence": "Medium",
+        "source": "Government health notice",
+        "exposure": "No current exposure",
+        "summary": "Selected public medical facilities are operating with reduced capacity. No current staff exposure identified.",
+        "ai_reason": "Health-related event with no current exposure. AI recommends Inform.",
+        "published": True,
+        "published_hours_ago": 55,
+        "time": "55 hrs ago",
     },
     {
         "id": "EVT-2405",
@@ -107,6 +151,7 @@ EVENTS = [
         "summary": "Minor local traffic accident with no assessed security, health, medical or travel relevance to corporate exposure.",
         "ai_reason": "No exposure match and no operational relevance. AI recommends Discard.",
         "published": False,
+        "published_hours_ago": None,
         "time": "1 hr 20 mins ago",
     },
 ]
@@ -119,10 +164,10 @@ FIXED_EXPOSURE = [
 ]
 
 DYNAMIC_EXPOSURE = [
-    {"traveller": "Traveller A", "country": "Kenya", "airport": "NBO", "date_range": "12-14 May", "status": "Monitored movement", "lat": -1.3192, "lon": 36.9278},
-    {"traveller": "Traveller B", "country": "Kenya", "airport": "NBO", "date_range": "12 May", "status": "Traveller notification", "lat": -1.3192, "lon": 36.9278},
-    {"traveller": "Traveller C", "country": "Türkiye", "airport": "IST", "date_range": "11-12 May", "status": "Traveller notification", "lat": 41.2753, "lon": 28.7519},
-    {"traveller": "Traveller D", "country": "Türkiye", "airport": "IST", "date_range": "12 May", "status": "Traveller notification", "lat": 41.2753, "lon": 28.7519},
+    {"traveller": "Traveller A", "country": "Kenya", "airport": "NBO", "date_range": "12-14 May", "status": "Monitored move", "lat": -1.3192, "lon": 36.9278},
+    {"traveller": "Traveller B", "country": "Kenya", "airport": "NBO", "date_range": "12 May", "status": "Monitored move", "lat": -1.3192, "lon": 36.9278},
+    {"traveller": "Traveller C", "country": "Türkiye", "airport": "IST", "date_range": "11-12 May", "status": "Monitored move", "lat": 41.2753, "lon": 28.7519},
+    {"traveller": "Traveller D", "country": "Spain", "airport": "MAD", "date_range": "13 May", "status": "Monitored move", "lat": 40.4983, "lon": -3.5676},
 ]
 
 RISK_REPORTS = [
@@ -143,21 +188,20 @@ COLOURS = {
 }
 
 df_events["colour"] = df_events["ai_classification"].map(COLOURS)
-df_events["published_colour"] = df_events["operator_classification"].fillna(df_events["ai_classification"]).map(COLOURS)
+df_events["display_classification"] = df_events["operator_classification"].fillna(df_events["ai_classification"])
+df_events["display_colour"] = df_events["display_classification"].map(COLOURS)
 df_events["radius"] = df_events["ai_classification"].map({"Red": 46000, "Amber": 32000, "Inform": 22000, "Discard": 14000})
+df_events["pulse_radius"] = df_events["display_classification"].map({"Red": 82000, "Amber": 62000, "Inform": 46000, "Discard": 18000})
+df_events["pulse_colour"] = df_events["display_classification"].map(COLOURS)
 
 # -----------------------------
-# UI mode
+# Sidebar / theme
 # -----------------------------
 st.sidebar.title("🛡️ Overwatch")
-st.sidebar.caption("Prototype v3: dummy data only")
+st.sidebar.caption("Prototype v4: dummy data only")
 
 theme_mode = st.sidebar.radio("Display mode", ["Low contrast", "High contrast"], horizontal=False)
-
-page = st.sidebar.radio(
-    "Select environment",
-    ["Overwatch Pulse", "Overwatch Monitor", "Overwatch Risk"],
-)
+page = st.sidebar.radio("Select environment", ["Overwatch Pulse", "Overwatch Monitor", "Overwatch Risk"])
 
 st.sidebar.divider()
 st.sidebar.caption("Key")
@@ -168,7 +212,6 @@ with st.sidebar.popover("Classification model"):
     st.write("⚫ **Discard**: no operational relevance")
 
 high = theme_mode == "High contrast"
-
 bg = "#020617" if not high else "#000814"
 panel = "#0f172a" if not high else "#001d3d"
 border = "#1e293b" if not high else "#00b4d8"
@@ -186,14 +229,12 @@ st.markdown(
             linear-gradient(135deg, {bg}, #020617 60%, #000);
         color: {text};
     }}
-    .block-container {{
-        padding-top: 1.1rem;
-    }}
+    .block-container {{ padding-top: 1.1rem; }}
     .hero {{
         border: 1px solid {border};
         background:
             linear-gradient(135deg, rgba(15,23,42,.92), rgba(2,6,23,.86)),
-            radial-gradient(circle at 70% 30%, rgba(56,189,248,.2), transparent 35%);
+            radial-gradient(circle at 70% 30%, rgba(56,189,248,.22), transparent 35%);
         box-shadow: 0 0 42px {glow};
         border-radius: 28px;
         padding: 26px;
@@ -217,7 +258,7 @@ st.markdown(
         color: {muted};
         font-size: 17px;
         margin-top: 10px;
-        max-width: 900px;
+        max-width: 980px;
     }}
     .metric-card {{
         background: rgba(15,23,42,.78);
@@ -262,6 +303,29 @@ st.markdown(
         margin-left: 6px;
         cursor: help;
     }}
+    .ticker {{
+        overflow: hidden;
+        white-space: nowrap;
+        border: 1px solid {border};
+        background: rgba(2,6,23,.72);
+        border-radius: 18px;
+        box-shadow: 0 0 26px rgba(14,165,233,.12);
+        margin: 10px 0 18px 0;
+    }}
+    .ticker-track {{
+        display: inline-block;
+        padding: 12px 0;
+        animation: ticker 32s linear infinite;
+    }}
+    .ticker span {{
+        color: #cbd5e1;
+        margin-right: 42px;
+        font-size: 14px;
+    }}
+    @keyframes ticker {{
+        0% {{ transform: translateX(100%); }}
+        100% {{ transform: translateX(-100%); }}
+    }}
     .status-pill {{
         border-radius: 999px;
         padding: 4px 10px;
@@ -273,14 +337,6 @@ st.markdown(
     .rag-amber {{ color: #fde68a; background: rgba(245,158,11,.2); border-color: rgba(245,158,11,.55); }}
     .rag-inform {{ color: #bfdbfe; background: rgba(59,130,246,.22); border-color: rgba(59,130,246,.55); }}
     .rag-discard {{ color: #cbd5e1; background: rgba(100,116,139,.2); border-color: rgba(100,116,139,.55); }}
-    .small-muted {{ color: {muted}; font-size: 13px; }}
-    .section-panel {{
-        background: rgba(15,23,42,.72);
-        border: 1px solid {border};
-        border-radius: 22px;
-        padding: 18px;
-        box-shadow: 0 0 24px rgba(14,165,233,.08);
-    }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -304,14 +360,32 @@ def metric_card(label, value, sub, help_text=""):
         unsafe_allow_html=True,
     )
 
-def map_view(events_df, show_fixed=True, show_dynamic=True):
-    # map_style=None avoids Mapbox token issues and makes the map display reliably on Streamlit Community Cloud.
-    layers = [
+def map_view(events_df, show_fixed=True, show_dynamic=True, pulse_risks=False, pulse_moves=False):
+    layers = []
+
+    if pulse_risks and not events_df.empty:
+        layers.append(
+            pdk.Layer(
+                "ScatterplotLayer",
+                data=events_df,
+                get_position="[lon, lat]",
+                get_fill_color="[0, 0, 0, 0]",
+                get_line_color="pulse_colour",
+                get_radius="pulse_radius",
+                stroked=True,
+                filled=False,
+                line_width_min_pixels=3,
+                opacity=0.55,
+                pickable=False,
+            )
+        )
+
+    layers.append(
         pdk.Layer(
             "ScatterplotLayer",
             data=events_df,
             get_position="[lon, lat]",
-            get_fill_color="colour",
+            get_fill_color="display_colour" if "display_colour" in events_df.columns else "colour",
             get_radius="radius",
             pickable=True,
             opacity=0.85,
@@ -319,7 +393,7 @@ def map_view(events_df, show_fixed=True, show_dynamic=True):
             get_line_color=[255, 255, 255],
             line_width_min_pixels=1,
         )
-    ]
+    )
 
     if show_fixed:
         layers.append(
@@ -331,6 +405,25 @@ def map_view(events_df, show_fixed=True, show_dynamic=True):
                 get_radius=19000,
                 pickable=True,
                 opacity=0.9,
+            )
+        )
+
+    if show_dynamic and pulse_moves:
+        move_df = df_dynamic.copy()
+        move_df["ring_radius"] = 44000
+        layers.append(
+            pdk.Layer(
+                "ScatterplotLayer",
+                data=move_df,
+                get_position="[lon, lat]",
+                get_fill_color=[0, 0, 0, 0],
+                get_line_color=[168, 85, 247],
+                get_radius="ring_radius",
+                stroked=True,
+                filled=False,
+                line_width_min_pixels=3,
+                opacity=0.5,
+                pickable=False,
             )
         )
 
@@ -352,13 +445,14 @@ def map_view(events_df, show_fixed=True, show_dynamic=True):
         initial_view_state=pdk.ViewState(latitude=18, longitude=30, zoom=1.1, pitch=0),
         layers=layers,
         tooltip={
-            "html": "<b>{title}</b><br/>{city}, {country}<br/>{ai_classification}<br/>{exposure}",
+            "html": "<b>{title}</b><br/>{city}, {country}<br/>{display_classification}<br/>{exposure}",
             "style": {"backgroundColor": "#0f172a", "color": "white"},
         },
     )
-    st.pydeck_chart(deck, use_container_width=True, height=420)
+    st.pydeck_chart(deck, use_container_width=True, height=430)
 
 published_df = df_events[df_events["published"] == True].copy()
+last_72_df = published_df[published_df["published_hours_ago"] <= 72].copy()
 monitor_df = df_events[df_events["published"] == False].copy()
 
 # -----------------------------
@@ -371,58 +465,78 @@ if page == "Overwatch Pulse":
             <div class="hero-kicker">Overwatch Pulse</div>
             <div class="hero-title">Live Common Intelligence Picture</div>
             <div class="hero-sub">
-                Operator-approved advisories, active areas of concern and validated updates for customer, executive and traveller awareness.
+                Operator-approved risks, monitored moves and validated updates for customer, executive and traveller awareness.
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    c1, c2, c3, c4 = st.columns(4)
+    ticker_items = []
+    for item in last_72_df.to_dict("records"):
+        ticker_items.append(f"{item['operator_classification']} · {item['country']} · {item['title']}")
+    ticker_html = "<span>LIVE RISKS</span>" + "".join([f"<span>{x}</span>" for x in ticker_items])
+    st.markdown(f"<div class='ticker'><div class='ticker-track'>{ticker_html}</div></div>", unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns(3)
     with c1:
         metric_card(
-            "Active advisories",
+            "Active risks",
             str(len(published_df)),
-            "Operator-approved items",
-            "Published events that have been reviewed by a human operator and made visible on Overwatch Pulse."
+            "Click/toggle pulse on map",
+            "Operator-approved live risks currently displayed on Overwatch Pulse."
         )
     with c2:
         metric_card(
-            "Active areas",
-            str(published_df["country"].nunique()),
-            "Countries with published items",
-            "Countries currently represented in the live common intelligence picture."
+            "Monitored moves",
+            str(len(df_dynamic)),
+            "Journeys being monitored",
+            "Journeys or traveller movements currently being watched against the live risk picture."
         )
     with c3:
-        metric_card(
-            "Traveller notices",
-            "3",
-            "Issued or pending",
-            "Traveller-focused communications that have been issued, drafted or queued following operator assessment."
-        )
-    with c4:
+        red_count = (last_72_df["operator_classification"] == "Red").sum()
+        amber_count = (last_72_df["operator_classification"] == "Amber").sum()
+        inform_count = (last_72_df["operator_classification"] == "Inform").sum()
         metric_card(
             "Published updates",
-            "12",
-            "Last 24 hours",
-            "Advisories, situation updates or operator-validated messages published from Overwatch Monitor to Overwatch Pulse or distribution lists."
+            f"{len(last_72_df)}",
+            f"72 hrs: {red_count} Red · {amber_count} Amber · {inform_count} Inform",
+            "Operator-approved updates published in the last 72 hours, excluding discarded items."
         )
 
-    st.subheader("Published intelligence map")
-    map_view(published_df, show_fixed=False, show_dynamic=False)
+    pulse_col1, pulse_col2 = st.columns([0.72, 0.28])
+    with pulse_col1:
+        pulse_risks = st.toggle("Pulse active risks on map", value=True)
+    with pulse_col2:
+        pulse_moves = st.toggle("Pulse monitored moves", value=False)
 
-    st.subheader("Published advisories")
-    for item in published_df.to_dict("records"):
-        with st.container(border=True):
-            cols = st.columns([0.72, 0.14, 0.14])
-            with cols[0]:
-                st.markdown(f"### {item['title']}")
-                st.write(f"{item['city']}, {item['country']} · {item['time']}")
-                st.write(item["summary"])
-            with cols[1]:
-                st.markdown(badge(item["operator_classification"]), unsafe_allow_html=True)
-            with cols[2]:
-                st.write(item["operator_status"])
+    st.subheader("Live common intelligence map")
+    map_view(published_df, show_fixed=False, show_dynamic=True, pulse_risks=pulse_risks, pulse_moves=pulse_moves)
+
+    st.subheader("Published updates: last 72 hours")
+    tab_red, tab_amber, tab_inform = st.tabs(["Red", "Amber", "Inform"])
+
+    def render_updates(classification):
+        data = last_72_df[last_72_df["operator_classification"] == classification]
+        if data.empty:
+            st.info(f"No {classification} updates in the last 72 hours.")
+        for item in data.to_dict("records"):
+            with st.container(border=True):
+                cols = st.columns([0.78, 0.22])
+                with cols[0]:
+                    st.markdown(f"### {item['title']}")
+                    st.write(f"{item['city']}, {item['country']} · {item['time']}")
+                    st.write(item["summary"])
+                with cols[1]:
+                    st.markdown(badge(item["operator_classification"]), unsafe_allow_html=True)
+                    st.write(item["operator_status"])
+
+    with tab_red:
+        render_updates("Red")
+    with tab_amber:
+        render_updates("Amber")
+    with tab_inform:
+        render_updates("Inform")
 
 # -----------------------------
 # Monitor
@@ -462,7 +576,7 @@ elif page == "Overwatch Monitor":
         st.subheader("Operational map")
         show_fixed = st.checkbox("Show fixed exposure", value=True)
         show_dynamic = st.checkbox("Show dynamic exposure", value=True)
-        map_view(monitor_df, show_fixed=show_fixed, show_dynamic=show_dynamic)
+        map_view(monitor_df, show_fixed=show_fixed, show_dynamic=show_dynamic, pulse_risks=False, pulse_moves=False)
 
         st.subheader("AI-generated events table")
         st.dataframe(
