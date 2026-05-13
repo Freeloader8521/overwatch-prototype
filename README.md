@@ -1,20 +1,17 @@
 
 # Overwatch Streamlit Prototype
 
-This is a simple dummy-data prototype for the Overwatch concept.
+Prototype v3 for Overwatch.
 
-It includes three prototype environments:
+## Key changes
 
-- **Overwatch Pulse**: customer-facing global operational picture
-- **Overwatch Monitor**: operator dashboard for real-time threat monitoring
-- **Overwatch Risk**: strategic risk, mitigation and reporting view
-
-## v2 update
-
-- Red / Amber / Inform / Discard classification model
-- Hover explanations on key metric cards
-- Improved Monitor events table
-- Discard example added to the operator queue
+- Pulse renamed to **Live Common Intelligence Picture**
+- Pulse only shows operator-approved/published items
+- Monitor now shows AI-generated events in an operator workflow
+- Red / Amber / Inform / Discard classification model moved to a small hover key in the sidebar
+- Low contrast and high contrast display modes
+- Map style no longer depends on a Mapbox token, improving Streamlit deployment reliability
+- Dark blue high-tech Pulse styling
 
 ## Run locally
 
