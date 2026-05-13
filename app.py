@@ -10,9 +10,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# -----------------------------
-# Dummy data
-# -----------------------------
 INCIDENTS = [
     {
         "id": "EVT-2401",
@@ -22,7 +19,7 @@ INCIDENTS = [
         "lat": -1.286389,
         "lon": 36.817223,
         "type": "Security",
-        "rag": "Red",
+        "classification": "Red",
         "confidence": "High",
         "status": "Under Investigation",
         "source": "Dataminr + local office report",
@@ -40,10 +37,10 @@ INCIDENTS = [
         "lat": 41.275278,
         "lon": 28.751944,
         "type": "Travel",
-        "rag": "Amber",
+        "classification": "Amber",
         "confidence": "Medium",
         "status": "AI Triaged",
-        "source": "Aviation feed",
+        "source": "Dataminr aviation alert",
         "exposure": "2 traveller notifications",
         "distance": "Airport-level impact",
         "summary": "Departures are delayed following a security screening disruption. Two staff travellers are scheduled to transit through IST within the next 18 hours.",
@@ -58,7 +55,7 @@ INCIDENTS = [
         "lat": 14.599512,
         "lon": 120.984222,
         "type": "Environmental",
-        "rag": "Amber",
+        "classification": "Amber",
         "confidence": "High",
         "status": "Monitoring",
         "source": "Government meteorological agency",
@@ -76,15 +73,33 @@ INCIDENTS = [
         "lat": 52.520008,
         "lon": 13.404954,
         "type": "Civil Unrest",
-        "rag": "Green",
+        "classification": "Inform",
         "confidence": "Medium",
-        "status": "Closed",
+        "status": "Published for awareness",
         "source": "Open media reporting",
         "exposure": "No active exposure identified",
         "distance": "No direct exposure",
         "summary": "A planned demonstration has been announced. No offices, staff accommodation, temporary locations or monitored movements are currently assessed as exposed.",
-        "ai": "Recommend Green. No action required beyond passive monitoring.",
+        "ai": "Recommend Inform. Relevant to regional awareness but no operational action required.",
         "time": "1 hr ago",
+    },
+    {
+        "id": "EVT-2405",
+        "title": "Local traffic accident reported",
+        "city": "Lyon",
+        "country": "France",
+        "lat": 45.764043,
+        "lon": 4.835659,
+        "type": "Local disruption",
+        "classification": "Discard",
+        "confidence": "High",
+        "status": "Discarded",
+        "source": "Open source social media",
+        "exposure": "No corporate exposure",
+        "distance": "No match",
+        "summary": "Minor local traffic accident with no assessed security, health, medical or travel relevance to corporate exposure.",
+        "ai": "Recommend Discard. No corporate exposure or operational relevance identified.",
+        "time": "1 hr 20 mins ago",
     },
 ]
 
@@ -112,18 +127,16 @@ df_incidents = pd.DataFrame(INCIDENTS)
 df_offices = pd.DataFrame(OFFICES)
 df_travellers = pd.DataFrame(TRAVELLERS)
 
-RAG_COLOURS = {
+CLASSIFICATION_COLOURS = {
     "Red": [239, 68, 68],
     "Amber": [245, 158, 11],
-    "Green": [34, 197, 94],
+    "Inform": [59, 130, 246],
+    "Discard": [100, 116, 139],
 }
 
-df_incidents["colour"] = df_incidents["rag"].map(RAG_COLOURS)
-df_incidents["radius"] = df_incidents["rag"].map({"Red": 45000, "Amber": 30000, "Green": 18000})
+df_incidents["colour"] = df_incidents["classification"].map(CLASSIFICATION_COLOURS)
+df_incidents["radius"] = df_incidents["classification"].map({"Red": 45000, "Amber": 30000, "Inform": 22000, "Discard": 14000})
 
-# -----------------------------
-# Styling
-# -----------------------------
 st.markdown(
     """
     <style>
@@ -139,6 +152,11 @@ st.markdown(
         border-radius: 18px;
         padding: 18px;
         min-height: 120px;
+        transition: all .15s ease;
+    }
+    .metric-card:hover {
+        border-color: #38bdf8;
+        box-shadow: 0 0 0 1px rgba(56,189,248,.25), 0 12px 32px rgba(0,0,0,.25);
     }
     .metric-label {
         color: #94a3b8;
@@ -157,11 +175,18 @@ st.markdown(
         font-size: 13px;
         margin-top: 8px;
     }
-    .panel {
-        background: #0f172a;
-        border: 1px solid #1e293b;
-        border-radius: 18px;
-        padding: 18px;
+    .info-dot {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        border: 1px solid #334155;
+        color: #67e8f9;
+        font-size: 11px;
+        margin-left: 6px;
+        cursor: help;
     }
     .rag-red {
         color: #fecaca;
@@ -181,10 +206,19 @@ st.markdown(
         font-size: 12px;
         font-weight: 700;
     }
-    .rag-green {
-        color: #bbf7d0;
-        background: rgba(34, 197, 94, .18);
-        border: 1px solid rgba(34, 197, 94, .4);
+    .rag-inform {
+        color: #bfdbfe;
+        background: rgba(59, 130, 246, .18);
+        border: 1px solid rgba(59, 130, 246, .4);
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .rag-discard {
+        color: #cbd5e1;
+        background: rgba(100, 116, 139, .18);
+        border: 1px solid rgba(100, 116, 139, .4);
         border-radius: 999px;
         padding: 4px 10px;
         font-size: 12px;
@@ -195,15 +229,17 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-def rag_badge(rag):
-    css = {"Red": "rag-red", "Amber": "rag-amber", "Green": "rag-green"}[rag]
-    return f"<span class='{css}'>{rag}</span>"
+def classification_badge(value):
+    css = {"Red": "rag-red", "Amber": "rag-amber", "Inform": "rag-inform", "Discard": "rag-discard"}[value]
+    return f"<span class='{css}'>{value}</span>"
 
-def metric_card(label, value, sub):
+def metric_card(label, value, sub, help_text=""):
+    safe_help = help_text.replace('"', '&quot;')
+    info = f"<span class='info-dot' title=\"{safe_help}\">i</span>" if help_text else ""
     st.markdown(
         f"""
-        <div class="metric-card">
-            <div class="metric-label">{label}</div>
+        <div class="metric-card" title="{safe_help}">
+            <div class="metric-label">{label}{info}</div>
             <div class="metric-value">{value}</div>
             <div class="metric-sub">{sub}</div>
         </div>
@@ -258,51 +294,75 @@ def map_view(show_offices=True, show_travellers=True):
         initial_view_state=pdk.ViewState(latitude=18, longitude=30, zoom=1.15, pitch=0),
         layers=layers,
         tooltip={
-            "html": "<b>{title}</b><br/>{city}, {country}<br/>{rag}<br/>{exposure}",
+            "html": "<b>{title}</b><br/>{city}, {country}<br/>{classification}<br/>{exposure}",
             "style": {"backgroundColor": "#0f172a", "color": "white"},
         },
     )
     st.pydeck_chart(deck, use_container_width=True)
 
-# -----------------------------
-# Sidebar
-# -----------------------------
 st.sidebar.title("🛡️ Overwatch")
-st.sidebar.caption("Prototype v1: dummy data only")
-
+st.sidebar.caption("Prototype v2: dummy data only")
 page = st.sidebar.radio(
     "Select environment",
     ["Overwatch Pulse", "Overwatch Monitor", "Overwatch Risk"],
 )
 
 st.sidebar.divider()
-st.sidebar.caption("Prototype navigation")
-st.sidebar.write("Pulse: customer-facing view")
-st.sidebar.write("Monitor: operator workspace")
-st.sidebar.write("Risk: strategic risk and mitigation")
+st.sidebar.caption("Classification model")
+st.sidebar.write("🔴 Red: action required")
+st.sidebar.write("🟠 Amber: monitor / assess")
+st.sidebar.write("🔵 Inform: awareness only")
+st.sidebar.write("⚫ Discard: no operational relevance")
 
-# -----------------------------
-# Page: Pulse
-# -----------------------------
 if page == "Overwatch Pulse":
     st.title("Overwatch Pulse")
     st.caption("Customer-facing global operational picture")
 
+    with st.expander("Classification model: Red / Amber / Inform / Discard"):
+        st.write(
+            """
+            **Red** means action required. **Amber** means monitor or assess. **Inform** means relevant awareness only.
+            **Discard** means no operational relevance and should normally not be published.
+            """
+        )
+
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        metric_card("Active advisories", "4", "1 Red, 2 Amber, 1 Green")
+        metric_card(
+            "Active advisories",
+            "4",
+            "1 Red, 2 Amber, 1 Inform",
+            "Events that have been assessed and are currently visible to customers in Overwatch Pulse. Red requires action, Amber requires monitoring or assessment, Inform is awareness only."
+        )
     with c2:
-        metric_card("Potentially impacted", "5", "Across Kenya and Türkiye")
+        metric_card(
+            "Potentially impacted",
+            "5",
+            "Across Kenya and Türkiye",
+            "People, offices, staff accommodation or temporary locations that may be affected because an event overlaps with a known location, airport, travel window or monitored movement."
+        )
     with c3:
-        metric_card("Traveller notices", "7", "Issued or pending review")
+        metric_card(
+            "Traveller notices",
+            "7",
+            "Issued or pending review",
+            "Targeted notifications for staff whose travel plans, airport transits or monitored movements may intersect with an assessed incident."
+        )
     with c4:
-        metric_card("Published updates", "12", "Last 24 hours")
+        metric_card(
+            "Published updates",
+            "12",
+            "Last 24 hours",
+            "Advisories, situation updates or operator-validated messages published from Overwatch Monitor to Overwatch Pulse or distribution lists."
+        )
 
     st.subheader("Global threat map")
     map_view(show_offices=True, show_travellers=True)
 
     st.subheader("Current published advisories")
     for item in INCIDENTS:
+        if item["classification"] == "Discard":
+            continue
         with st.container(border=True):
             cols = st.columns([0.7, 0.15, 0.15])
             with cols[0]:
@@ -310,13 +370,10 @@ if page == "Overwatch Pulse":
                 st.write(f"{item['city']}, {item['country']} · {item['time']}")
                 st.write(item["summary"])
             with cols[1]:
-                st.markdown(rag_badge(item["rag"]), unsafe_allow_html=True)
+                st.markdown(classification_badge(item["classification"]), unsafe_allow_html=True)
             with cols[2]:
                 st.write(item["status"])
 
-# -----------------------------
-# Page: Monitor
-# -----------------------------
 elif page == "Overwatch Monitor":
     st.title("Overwatch Monitor")
     st.caption("Operator dashboard for live triage, exposure correlation and dissemination")
@@ -328,15 +385,15 @@ elif page == "Overwatch Monitor":
         selected_id = st.radio(
             "Select event",
             [i["id"] for i in INCIDENTS],
-            format_func=lambda x: f"{x} · {next(i for i in INCIDENTS if i['id'] == x)['rag']} · {next(i for i in INCIDENTS if i['id'] == x)['city']}",
+            format_func=lambda x: f"{x} · {next(i for i in INCIDENTS if i['id'] == x)['classification']} · {next(i for i in INCIDENTS if i['id'] == x)['city']}",
             label_visibility="collapsed",
         )
         selected = next(i for i in INCIDENTS if i["id"] == selected_id)
 
         st.divider()
         st.caption("Queue controls")
-        st.selectbox("Filter by RAG", ["All", "Red", "Amber", "Green"])
-        st.selectbox("Filter by status", ["All", "AI Triaged", "Under Investigation", "Monitoring", "Closed"])
+        st.selectbox("Filter by classification", ["All", "Red", "Amber", "Inform", "Discard"])
+        st.selectbox("Filter by status", ["All", "AI Triaged", "Under Investigation", "Monitoring", "Published for awareness", "Discarded"])
 
     with centre:
         st.subheader("Operational map")
@@ -344,7 +401,7 @@ elif page == "Overwatch Monitor":
 
         st.subheader("Selected incident")
         st.markdown(f"### {selected['title']}")
-        st.markdown(rag_badge(selected["rag"]), unsafe_allow_html=True)
+        st.markdown(classification_badge(selected["classification"]), unsafe_allow_html=True)
         st.write(f"**Location:** {selected['city']}, {selected['country']}")
         st.write(f"**Source:** {selected['source']}")
         st.write(f"**Confidence:** {selected['confidence']}")
@@ -352,14 +409,25 @@ elif page == "Overwatch Monitor":
         st.write(f"**Distance / impact area:** {selected['distance']}")
         st.write(selected["summary"])
 
+        st.subheader("Events table")
+        st.dataframe(
+            df_incidents[["id", "time", "source", "title", "country", "type", "classification", "confidence", "status", "exposure"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+
     with right:
-        st.subheader("AI assessment")
+        st.subheader("Internal assessment")
         with st.container(border=True):
             st.write(selected["ai"])
 
         st.subheader("Operator decision")
-        final_rag = st.selectbox("Final RAG", ["Green", "Amber", "Red"], index=["Green", "Amber", "Red"].index(selected["rag"]))
-        status = st.selectbox("Workflow status", ["New", "AI Triaged", "Under Investigation", "Analyst Assessed", "Published", "Monitoring", "Closed", "Archived"])
+        final_classification = st.selectbox(
+            "Final classification",
+            ["Red", "Amber", "Inform", "Discard"],
+            index=["Red", "Amber", "Inform", "Discard"].index(selected["classification"])
+        )
+        status = st.selectbox("Workflow status", ["New", "AI Triaged", "Under Investigation", "Analyst Assessed", "Published", "Monitoring", "Closed", "Archived", "Discarded"])
         notes = st.text_area("Analyst notes", placeholder="Add operational context, source validation or override rationale...")
         st.button("Save analyst assessment", type="primary")
 
@@ -368,20 +436,32 @@ elif page == "Overwatch Monitor":
         st.button("Draft email advisory")
         st.button("Publish to Overwatch Pulse")
 
-# -----------------------------
-# Page: Risk
-# -----------------------------
 else:
     st.title("Overwatch Risk")
     st.caption("Strategic risk, reporting and mitigation workspace")
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        metric_card("Reviews due", "3", "Next 30 days")
+        metric_card(
+            "Reviews due",
+            "3",
+            "Next 30 days",
+            "Scheduled country, office or route risk reviews that are due for update within the next 30 days."
+        )
     with c2:
-        metric_card("Hotspots", "8", "Recurring exposure locations")
+        metric_card(
+            "Hotspots",
+            "8",
+            "Recurring exposure locations",
+            "Countries, cities, airports or areas where incidents repeatedly overlap with corporate exposure or travel activity."
+        )
     with c3:
-        metric_card("Open mitigations", "14", "Recommendations requiring action")
+        metric_card(
+            "Open mitigations",
+            "14",
+            "Recommendations requiring action",
+            "Risk reduction actions that have been recommended but not yet completed, such as traveller guidance, office security measures or contingency planning."
+        )
 
     st.subheader("Risk products")
     for report in RISK_REPORTS:
@@ -399,7 +479,7 @@ else:
     )
 
     st.dataframe(
-        df_incidents[["id", "country", "city", "type", "rag", "confidence", "status", "exposure"]],
+        df_incidents[["id", "country", "city", "type", "classification", "confidence", "status", "exposure"]],
         use_container_width=True,
         hide_index=True,
     )
