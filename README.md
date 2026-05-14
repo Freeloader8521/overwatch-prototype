@@ -1,13 +1,14 @@
 
-# Spectre Prototype v9
+Spectre v10
 
-Updated operational prototype with:
-- Spectre branding
-- Atlas common intelligence picture
-- Cleaner operational UI
-- Reduced map clutter
-- Softer icon palette
-- Rajdhani + Inter typography
-- Updated Pulse/Atlas metrics
-- Create Internal Event workflow
-- Cleaner Monitor layout
+Updates:
+- Working Publish / Monitor / Discard actions
+- Create Internal Event now functional
+- Internal events publish immediately
+- Risk archive added
+- Published events automatically populate Risk archive
+- Inform events auto-expire after 12 hours
+- Red and Amber remain until manually updated
+- Locations tab restored:
+  - Offices
+  - Temporary Locations

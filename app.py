@@ -2,16 +2,14 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from datetime import datetime, timedelta
+import uuid
 
-st.set_page_config(
-    page_title="Spectre",
-    layout="wide",
-    page_icon="◉"
-)
+st.set_page_config(page_title="Spectre", layout="wide", page_icon="◉")
 
-# -------------------------------------------------
+# ---------------------------------------------------
 # Styling
-# -------------------------------------------------
+# ---------------------------------------------------
 
 st.markdown("""
 <style>
@@ -117,13 +115,6 @@ h1,h2,h3 {
     color:#bfdbfe;
 }
 
-.section-box {
-    background: rgba(15,23,42,.52);
-    border-radius:18px;
-    border:1px solid rgba(59,130,246,.10);
-    padding:18px;
-}
-
 .small-note {
     color:#94a3b8;
     font-size:13px;
@@ -131,48 +122,75 @@ h1,h2,h3 {
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------------------------------------
-# Dummy Data
-# -------------------------------------------------
+# ---------------------------------------------------
+# Session state
+# ---------------------------------------------------
 
-events = pd.DataFrame([
-    {
-        "id":"EVT-2402",
-        "title":"Airport disruption following security incident",
-        "country":"Türkiye",
-        "city":"Istanbul",
-        "lat":41.2753,
-        "lon":28.7519,
-        "classification":"Amber",
-        "origin":"Dataminr",
-        "summary":"Airport disruption affecting monitored staff movements.",
-        "published":False
-    },
-    {
-        "id":"INT-1001",
-        "title":"Staff alert triggered",
-        "country":"Singapore",
-        "city":"Singapore",
-        "lat":1.3521,
-        "lon":103.8198,
-        "classification":"Red",
-        "origin":"Internal staff alert",
-        "summary":"Staff member activated emergency alert.",
-        "published":True
-    },
-    {
-        "id":"OP-2001",
-        "title":"Office report: access disruption",
-        "country":"UAE",
-        "city":"Dubai",
-        "lat":25.2048,
-        "lon":55.2708,
-        "classification":"Amber",
-        "origin":"Operator report",
-        "summary":"Access road disruption near office.",
-        "published":True
-    }
-])
+if "events" not in st.session_state:
+    now = datetime.utcnow()
+
+    st.session_state.events = [
+        {
+            "id":"EVT-2402",
+            "title":"Airport disruption following security incident",
+            "country":"Türkiye",
+            "city":"Istanbul",
+            "lat":41.2753,
+            "lon":28.7519,
+            "classification":"Amber",
+            "origin":"Dataminr",
+            "summary":"Airport disruption affecting monitored staff movements.",
+            "published":False,
+            "created":now.isoformat(),
+            "status":"Workflow"
+        },
+        {
+            "id":"INT-1001",
+            "title":"Staff alert triggered",
+            "country":"Singapore",
+            "city":"Singapore",
+            "lat":1.3521,
+            "lon":103.8198,
+            "classification":"Red",
+            "origin":"Internal staff alert",
+            "summary":"Staff member activated emergency alert.",
+            "published":True,
+            "created":now.isoformat(),
+            "status":"Published"
+        },
+        {
+            "id":"OP-2001",
+            "title":"Office report: access disruption",
+            "country":"UAE",
+            "city":"Dubai",
+            "lat":25.2048,
+            "lon":55.2708,
+            "classification":"Amber",
+            "origin":"Operator report",
+            "summary":"Access road disruption near office.",
+            "published":True,
+            "created":(now - timedelta(hours=3)).isoformat(),
+            "status":"Published"
+        },
+        {
+            "id":"INF-1101",
+            "title":"Planned demonstration announced",
+            "country":"Germany",
+            "city":"Berlin",
+            "lat":52.52,
+            "lon":13.40,
+            "classification":"Inform",
+            "origin":"Open media",
+            "summary":"Awareness item. No direct exposure identified.",
+            "published":True,
+            "created":(now - timedelta(hours=6)).isoformat(),
+            "status":"Published"
+        }
+    ]
+
+# ---------------------------------------------------
+# Data
+# ---------------------------------------------------
 
 offices = pd.DataFrame([
     {"name":"London Office","lat":51.5072,"lon":-0.1276},
@@ -180,23 +198,40 @@ offices = pd.DataFrame([
     {"name":"Nairobi Office","lat":-1.2864,"lon":36.8172},
 ])
 
+temporary_locations = pd.DataFrame([
+    {"name":"Manila Project Site","status":"Active","country":"Philippines"},
+    {"name":"Lima Field Team","status":"Active","country":"Peru"},
+    {"name":"Lagos Election Team","status":"Archived","country":"Nigeria"},
+])
+
 moves = pd.DataFrame([
-    {"name":"Traveller A","lat":41.2753,"lon":28.7519},
-    {"name":"Traveller B","lat":1.3644,"lon":103.9915},
+    {"name":"Traveller A","route":"LHR → IST → NBO"},
+    {"name":"Traveller B","route":"DXB → SIN"},
 ])
 
-airports = pd.DataFrame([
-    {"name":"Heathrow","lat":51.4700,"lon":-0.4543},
-    {"name":"Istanbul Airport","lat":41.2753,"lon":28.7519},
-])
+events_df = pd.DataFrame(st.session_state.events)
 
-ports = pd.DataFrame([
-    {"name":"Singapore Port","lat":1.2644,"lon":103.8222},
-])
+# Inform expiry
+now = datetime.utcnow()
+display_events = []
 
-# -------------------------------------------------
+for _, row in events_df.iterrows():
+    created = datetime.fromisoformat(row["created"])
+
+    if row["classification"] == "Inform":
+        if now - created < timedelta(hours=12):
+            display_events.append(row)
+    else:
+        display_events.append(row)
+
+display_df = pd.DataFrame(display_events)
+
+published = display_df[display_df["published"] == True]
+workflow = display_df[display_df["published"] == False]
+
+# ---------------------------------------------------
 # Helpers
-# -------------------------------------------------
+# ---------------------------------------------------
 
 def metric(title, value, sub):
     st.markdown(f"""
@@ -208,30 +243,10 @@ def metric(title, value, sub):
     """, unsafe_allow_html=True)
 
 def pill(level):
-    cls = level.lower()
-    return f'<span class="status-pill {cls}">{level}</span>'
-
-def add_points(fig, df, colour, symbol, name, size):
-    fig.add_trace(go.Scattergeo(
-        lon=df["lon"],
-        lat=df["lat"],
-        mode="markers",
-        name=name,
-        marker=dict(
-            size=size,
-            color=colour,
-            symbol=symbol,
-            opacity=0.9,
-            line=dict(width=1,color="white")
-        ),
-        hovertext=df["name"],
-        hovertemplate="%{hovertext}<extra></extra>"
-    ))
+    return f'<span class="status-pill {level.lower()}">{level}</span>'
 
 def build_map():
     fig = go.Figure()
-
-    published = events[events["published"] == True]
 
     colours = {
         "Red":"#ef4444",
@@ -246,7 +261,7 @@ def build_map():
                 lon=subset["lon"],
                 lat=subset["lat"],
                 mode="markers",
-                name=f"{level} Risks",
+                name=level,
                 marker=dict(
                     size=20 if level=="Red" else 16,
                     color=colours[level],
@@ -257,10 +272,17 @@ def build_map():
                 hovertemplate="%{hovertext}<extra></extra>"
             ))
 
-    add_points(fig, offices, "#38bdf8", "square", "Offices", 9)
-    add_points(fig, moves, "#8b5cf6", "circle", "Monitored Moves", 7)
-    add_points(fig, airports, "#94a3b8", "triangle-up", "Airports", 6)
-    add_points(fig, ports, "#94a3b8", "diamond", "Ports", 6)
+    fig.add_trace(go.Scattergeo(
+        lon=offices["lat"]*0 + offices["lat"]*0 + [-0.1276,103.8198,36.8172],
+        lat=[51.5072,1.3521,-1.2864],
+        mode="markers",
+        name="Offices",
+        marker=dict(
+            size=9,
+            color="#38bdf8",
+            symbol="square"
+        )
+    ))
 
     fig.update_geos(
         projection_type="natural earth",
@@ -280,96 +302,121 @@ def build_map():
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#dbe7f5"),
-        legend=dict(
-            orientation="h",
-            y=-0.08,
-            x=0.5,
-            xanchor="center"
-        )
     )
 
     return fig
 
-# -------------------------------------------------
+# ---------------------------------------------------
 # Sidebar
-# -------------------------------------------------
+# ---------------------------------------------------
 
 st.sidebar.title("Spectre")
 
 page = st.sidebar.radio(
-    "Environment",
+    "Workspace",
     [
-        "Atlas",
-        "Spectre Monitor",
+        "Common Picture",
+        "Monitor",
         "Risk"
     ]
 )
 
-st.sidebar.divider()
+# ---------------------------------------------------
+# Common Picture
+# ---------------------------------------------------
 
-with st.sidebar.expander("Map Layers", expanded=True):
-    st.checkbox("Office Locations", value=True)
-    st.checkbox("Temporary Locations", value=True)
-    st.checkbox("Travelling Staff", value=True)
-    st.checkbox("Airports", value=True)
-    st.checkbox("Ports", value=True)
-
-# -------------------------------------------------
-# Atlas
-# -------------------------------------------------
-
-if page == "Atlas":
+if page == "Common Picture":
 
     st.markdown("""
     <div class="hero">
-        <div class="hero-kicker">Spectre Atlas</div>
+        <div class="hero-kicker">Spectre</div>
         <div class="hero-title">Live Common Intelligence Picture</div>
         <div class="hero-sub">
-        Operator-approved global operational picture showing validated risks, monitored staff movements and situational awareness updates.
+        Validated operational picture displaying published risks, monitored moves and situational awareness updates.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
+    red_count = len(published[published["classification"] == "Red"])
+    amber_count = len(published[published["classification"] == "Amber"])
+    inform_count = len(published[published["classification"] == "Inform"])
+
     c1,c2,c3,c4 = st.columns(4)
 
     with c1:
-        metric("Active Red Risks","1","Immediate action required")
+        metric("Active Red Risks", red_count, "Immediate action required")
     with c2:
-        metric("Active Amber Risks","1","Monitoring and assessment")
+        metric("Active Amber Risks", amber_count, "Monitoring and assessment")
     with c3:
-        metric("Informs","0","Awareness only")
+        metric("Informs", inform_count, "Awareness only")
     with c4:
-        metric("Monitored Moves","2","Journeys being monitored")
+        metric("Monitored Moves", len(moves), "Journeys being monitored")
 
     st.plotly_chart(build_map(), use_container_width=True)
 
-# -------------------------------------------------
+# ---------------------------------------------------
 # Monitor
-# -------------------------------------------------
+# ---------------------------------------------------
 
-elif page == "Spectre Monitor":
+elif page == "Monitor":
 
-    top_left, top_right = st.columns([0.7,0.3])
+    left_title, right_title = st.columns([0.7,0.3])
 
-    with top_left:
-        st.title("Spectre Monitor")
+    with left_title:
+        st.title("Monitor")
 
-    with top_right:
-        st.button("Create Internal Event", use_container_width=True)
+    with right_title:
+        with st.popover("Create Internal Event"):
+            with st.form("internal_event_form"):
+                title = st.text_input("Event Title")
+                country = st.text_input("Country")
+                city = st.text_input("City")
+                classification = st.selectbox(
+                    "Classification",
+                    ["Red","Amber","Inform"]
+                )
 
-    st.caption("Operational monitoring and event workflow")
+                summary = st.text_area("Summary")
+
+                submitted = st.form_submit_button("Create Event")
+
+                if submitted:
+                    new_event = {
+                        "id":"INT-" + str(uuid.uuid4())[:6].upper(),
+                        "title":title,
+                        "country":country,
+                        "city":city,
+                        "lat":0,
+                        "lon":0,
+                        "classification":classification,
+                        "origin":"Operator created",
+                        "summary":summary,
+                        "published":True,
+                        "created":datetime.utcnow().isoformat(),
+                        "status":"Published"
+                    }
+
+                    st.session_state.events.append(new_event)
+                    st.success("Internal event created and published.")
+
+    st.caption("Operational event workflow and triage")
 
     left, centre, right = st.columns([1,1.5,0.9])
 
-    workflow = events.copy()
+    workflow = pd.DataFrame([
+        e for e in st.session_state.events if e["published"] == False
+    ])
+
+    if len(workflow) == 0:
+        workflow = pd.DataFrame([st.session_state.events[0]])
 
     with left:
+
         st.subheader("Workflow Events")
 
         selected = st.radio(
             "Events",
             workflow["id"].tolist(),
-            format_func=lambda x: f"{x} · {workflow.loc[workflow['id']==x,'classification'].iloc[0]} · {workflow.loc[workflow['id']==x,'city'].iloc[0]}",
             label_visibility="collapsed"
         )
 
@@ -379,7 +426,10 @@ elif page == "Spectre Monitor":
 
         st.subheader("Selected Event")
 
-        st.markdown(pill(selected_event["classification"]), unsafe_allow_html=True)
+        st.markdown(
+            pill(selected_event["classification"]),
+            unsafe_allow_html=True
+        )
 
         st.markdown(f"### {selected_event['title']}")
 
@@ -394,7 +444,6 @@ elif page == "Spectre Monitor":
     with centre:
 
         st.subheader("Operational Map")
-
         st.plotly_chart(build_map(), use_container_width=True)
 
         t1,t2,t3 = st.tabs([
@@ -405,20 +454,32 @@ elif page == "Spectre Monitor":
 
         with t1:
             st.dataframe(
-                workflow[[
+                pd.DataFrame(st.session_state.events)[[
                     "id",
                     "origin",
                     "title",
                     "country",
-                    "classification"
+                    "classification",
+                    "status"
                 ]],
                 use_container_width=True,
                 hide_index=True
             )
 
         with t2:
+
+            st.markdown("##### Offices")
+
             st.dataframe(
                 offices,
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.markdown("##### Temporary Locations")
+
+            st.dataframe(
+                temporary_locations,
                 use_container_width=True,
                 hide_index=True
             )
@@ -434,39 +495,46 @@ elif page == "Spectre Monitor":
 
         st.subheader("Operator Decision")
 
-        st.selectbox(
+        classification = st.selectbox(
             "Final Classification",
             ["Red","Amber","Inform","Discard"]
         )
 
-        st.text_area(
+        notes = st.text_area(
             "Operator Notes",
-            placeholder="Add context, validation or escalation notes..."
+            placeholder="Add context or escalation notes..."
         )
 
-        b1,b2,b3 = st.columns(3)
+        if st.button("Publish", use_container_width=True):
 
-        with b1:
-            st.button("Publish", use_container_width=True)
+            for e in st.session_state.events:
+                if e["id"] == selected_event["id"]:
+                    e["published"] = True
+                    e["classification"] = classification
+                    e["status"] = "Published"
 
-        with b2:
-            st.button("Monitor", use_container_width=True)
+            st.success("Event published to Common Picture.")
 
-        with b3:
-            st.button("Discard", use_container_width=True)
+        if st.button("Monitor", use_container_width=True):
 
-        st.divider()
+            for e in st.session_state.events:
+                if e["id"] == selected_event["id"]:
+                    e["status"] = "Monitoring"
 
-        st.subheader("Distribution")
+            st.success("Event retained in monitoring workflow.")
 
-        st.markdown(
-            '<div class="small-note">Distribution drafting intentionally disabled in public prototype.</div>',
-            unsafe_allow_html=True
-        )
+        if st.button("Discard", use_container_width=True):
 
-# -------------------------------------------------
+            for e in st.session_state.events:
+                if e["id"] == selected_event["id"]:
+                    e["status"] = "Discarded"
+                    e["published"] = False
+
+            st.success("Event discarded.")
+
+# ---------------------------------------------------
 # Risk
-# -------------------------------------------------
+# ---------------------------------------------------
 
 else:
 
@@ -485,16 +553,27 @@ else:
 
     st.divider()
 
-    st.subheader("Strategic Risk Data")
+    st.subheader("Published Event Archive")
+
+    archive = pd.DataFrame([
+        e for e in st.session_state.events
+        if e["published"] == True
+    ])
 
     st.dataframe(
-        events[[
+        archive[[
             "id",
+            "title",
             "country",
             "origin",
             "classification",
+            "created",
             "summary"
         ]],
         use_container_width=True,
         hide_index=True
+    )
+
+    st.caption(
+        "Published events automatically populate the archive to support long-term risk analysis, trends and mitigation planning."
     )
