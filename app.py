@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import uuid
 import re
+from urllib.parse import quote
 
 st.set_page_config(page_title="Spectre", layout="wide", page_icon="◉")
 
@@ -16,9 +17,7 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 
-html, body, [class*="css"] {
-    font-family: 'Inter', sans-serif;
-}
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
 .stApp {
     background:
@@ -98,33 +97,22 @@ h1,h2,h3 {
     font-weight:700;
 }
 
-.red {
-    background:rgba(239,68,68,.16);
-    border:1px solid rgba(239,68,68,.35);
-    color:#fecaca;
-}
-
-.amber {
-    background:rgba(245,158,11,.14);
-    border:1px solid rgba(245,158,11,.35);
-    color:#fde68a;
-}
-
-.inform {
-    background:rgba(59,130,246,.14);
-    border:1px solid rgba(59,130,246,.35);
-    color:#bfdbfe;
-}
-
-.discard {
-    background:rgba(100,116,139,.14);
-    border:1px solid rgba(100,116,139,.35);
-    color:#cbd5e1;
-}
+.red { background:rgba(239,68,68,.16); border:1px solid rgba(239,68,68,.35); color:#fecaca; }
+.amber { background:rgba(245,158,11,.14); border:1px solid rgba(245,158,11,.35); color:#fde68a; }
+.inform { background:rgba(59,130,246,.14); border:1px solid rgba(59,130,246,.35); color:#bfdbfe; }
+.discard { background:rgba(100,116,139,.14); border:1px solid rgba(100,116,139,.35); color:#cbd5e1; }
 
 .small-note {
     color:#94a3b8;
     font-size:13px;
+}
+
+.risk-card {
+    border:1px solid rgba(59,130,246,.12);
+    background:rgba(15,23,42,.72);
+    border-radius:14px;
+    padding:12px;
+    margin-bottom:10px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -138,6 +126,7 @@ if "events" not in st.session_state:
     st.session_state.events = [
         {
             "id":"EVT-2402",
+            "source_type":"External",
             "title":"Airport disruption following security incident",
             "country":"Türkiye",
             "city":"Istanbul",
@@ -153,6 +142,7 @@ if "events" not in st.session_state:
         },
         {
             "id":"INT-1001",
+            "source_type":"Internal",
             "title":"Staff alert triggered",
             "country":"Singapore",
             "city":"Singapore",
@@ -167,7 +157,24 @@ if "events" not in st.session_state:
             "location_records":"Singapore | 1.3521, 103.8198"
         },
         {
+            "id":"OP-2001",
+            "source_type":"Internal",
+            "title":"Office report: access disruption",
+            "country":"UAE",
+            "city":"Dubai",
+            "lat":25.2048,
+            "lon":55.2708,
+            "classification":"Amber",
+            "origin":"Office phone report",
+            "summary":"Access road disruption near office.",
+            "published":True,
+            "created":(now - timedelta(hours=3)).isoformat(),
+            "status":"Published",
+            "location_records":"Dubai Office | 25.2048, 55.2708"
+        },
+        {
             "id":"INF-1101",
+            "source_type":"External",
             "title":"Planned demonstration announced",
             "country":"Germany",
             "city":"Berlin",
@@ -220,14 +227,18 @@ if "moves" not in st.session_state:
         }
     ]
 
+if "temporary_locations" not in st.session_state:
+    st.session_state.temporary_locations = [
+        {"id":"TMP-001","name":"Manila Project Site","status":"Active","country":"Philippines","city":"Manila","start":"2026-05-01","end":"2026-06-30","lat":14.5995,"lon":120.9842,"notes":"Temporary project location."},
+        {"id":"TMP-002","name":"Lima Field Team","status":"Active","country":"Peru","city":"Lima","start":"2026-05-10","end":"2026-05-19","lat":-12.0464,"lon":-77.0428,"notes":"Field visit location."},
+        {"id":"TMP-003","name":"Lagos Election Team","status":"Archived","country":"Nigeria","city":"Lagos","start":"2026-02-10","end":"2026-03-02","lat":6.5244,"lon":3.3792,"notes":"Archived election support location."},
+    ]
+
 if "staged_route_points" not in st.session_state:
     st.session_state.staged_route_points = []
 
-if "staged_locations" not in st.session_state:
-    st.session_state.staged_locations = []
-
 # ---------------------------------------------------
-# Reference lookups
+# Data
 # ---------------------------------------------------
 
 KNOWN_LOCATIONS = {
@@ -248,12 +259,24 @@ offices = pd.DataFrame([
     {"name":"London Office","lat":51.5072,"lon":-0.1276},
     {"name":"Singapore Office","lat":1.3521,"lon":103.8198},
     {"name":"Nairobi Office","lat":-1.2864,"lon":36.8172},
+    {"name":"Dubai Office","lat":25.2048,"lon":55.2708},
 ])
 
-temporary_locations = pd.DataFrame([
-    {"name":"Manila Project Site","status":"Active","country":"Philippines","start":"2026-05-01","end":"2026-06-30"},
-    {"name":"Lima Field Team","status":"Active","country":"Peru","start":"2026-05-10","end":"2026-05-19"},
-    {"name":"Lagos Election Team","status":"Archived","country":"Nigeria","start":"2026-02-10","end":"2026-03-02"},
+midb_points = pd.DataFrame([
+    {"name":"Heathrow Airport","type":"Airport","lat":51.4700,"lon":-0.4543},
+    {"name":"Istanbul Airport","type":"Airport","lat":41.2753,"lon":28.7519},
+    {"name":"Jomo Kenyatta International Airport","type":"Airport","lat":-1.3192,"lon":36.9278},
+    {"name":"Changi Airport","type":"Airport","lat":1.3644,"lon":103.9915},
+    {"name":"Madrid Barajas Airport","type":"Airport","lat":40.4983,"lon":-3.5676},
+    {"name":"Port of Singapore","type":"Port","lat":1.2644,"lon":103.8222},
+    {"name":"Port of Mombasa","type":"Port","lat":-4.0435,"lon":39.6682},
+    {"name":"Dover Port","type":"Port","lat":51.1251,"lon":1.3338},
+    {"name":"British Embassy Nairobi","type":"Diplomatic Outpost","lat":-1.2304,"lon":36.8135},
+    {"name":"US Embassy London","type":"Diplomatic Outpost","lat":51.4816,"lon":-0.1271},
+    {"name":"Turkey-Bulgaria Border Crossing","type":"Border Crossing","lat":41.7167,"lon":26.3500},
+    {"name":"Kenya-Tanzania Border Crossing","type":"Border Crossing","lat":-2.5439,"lon":36.7906},
+    {"name":"St Thomas' Hospital","type":"Hospital","lat":51.4980,"lon":-0.1187},
+    {"name":"Aga Khan University Hospital","type":"Hospital","lat":-1.2625,"lon":36.8172},
 ])
 
 # ---------------------------------------------------
@@ -300,7 +323,6 @@ def resolve_point(raw_text, label="Route point"):
 def parse_bulk_route(text):
     points = []
     errors = []
-
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     for idx, line in enumerate(lines, start=1):
         parts = [p.strip() for p in line.split(",")]
@@ -327,7 +349,6 @@ def event_display_df():
     df = pd.DataFrame(st.session_state.events)
     now = datetime.utcnow()
     rows = []
-
     for _, row in df.iterrows():
         created = datetime.fromisoformat(row["created"])
         if row["classification"] == "Inform":
@@ -354,14 +375,56 @@ def moves_df():
         })
     return pd.DataFrame(rows)
 
+def google_maps_link(lat, lon):
+    return f"https://www.google.com/maps?q={lat},{lon}"
+
+def build_notification_email(event, final_classification, notes, recipient):
+    subject = f"Spectre Notification: {final_classification} - {event['title']} - {event['country']}"
+    map_link = google_maps_link(event["lat"], event["lon"])
+    body = f"""Spectre Notification
+
+Classification: {final_classification}
+Source Type: {event.get('source_type', 'External')}
+Event: {event['title']}
+Location: {event['city']}, {event['country']}
+Origin: {event['origin']}
+Status: {event.get('status', 'N/A')}
+
+Summary:
+{event['summary']}
+
+Operator notes:
+{notes if notes else 'No additional operator notes added.'}
+
+Map:
+{map_link}
+
+This notification was generated from Spectre Monitor.
+"""
+    mailto = f"mailto:{quote(recipient)}?subject={quote(subject)}&body={quote(body)}"
+    return subject, body, mailto, map_link
+
+def add_reference_trace(fig, df, name, colour, symbol, size=7):
+    if df is None or len(df) == 0:
+        return
+    fig.add_trace(go.Scattergeo(
+        lon=df["lon"],
+        lat=df["lat"],
+        mode="markers",
+        name=name,
+        marker=dict(size=size, color=colour, symbol=symbol, opacity=0.72, line=dict(width=0.8, color="rgba(255,255,255,.65)")),
+        hovertext=df["name"],
+        hovertemplate="%{hovertext}<extra></extra>"
+    ))
+
 def build_map(selected_move_id=None, extra_route=None):
     fig = go.Figure()
 
     df = event_display_df()
     published = df[df["published"] == True]
-
     colours = {"Red":"#ef4444", "Amber":"#f59e0b", "Inform":"#60a5fa"}
 
+    # Risks are always visible.
     for level in ["Red","Amber","Inform"]:
         subset = published[published["classification"] == level]
         if len(subset) > 0:
@@ -370,62 +433,67 @@ def build_map(selected_move_id=None, extra_route=None):
                 lat=subset["lat"],
                 mode="markers",
                 name=f"{level} risks",
-                marker=dict(
-                    size=10 if level == "Inform" else 12,
-                    color=colours[level],
-                    opacity=0.96,
-                    line=dict(width=1,color="white")
-                ),
+                marker=dict(size=10 if level == "Inform" else 12, color=colours[level], opacity=0.96, line=dict(width=1,color="white")),
                 hovertext=subset["title"],
                 hovertemplate="%{hovertext}<extra></extra>"
             ))
 
-    # Offices
-    fig.add_trace(go.Scattergeo(
-        lon=offices["lon"],
-        lat=offices["lat"],
-        mode="markers",
-        name="Offices",
-        marker=dict(size=8,color="#38bdf8",symbol="square",opacity=.72),
-        hovertext=offices["name"],
-        hovertemplate="%{hovertext}<extra></extra>"
-    ))
-
-    # Move routes
+    # Monitored moves are always visible.
     for move in st.session_state.moves:
         points = move["route_points"]
         selected = selected_move_id == move["id"]
         width = 3 if selected else 1.4
         opacity = 0.95 if selected else 0.42
         colour = "#a78bfa" if selected else "#64748b"
-
         fig.add_trace(go.Scattergeo(
             lon=[p["lon"] for p in points],
             lat=[p["lat"] for p in points],
             mode="lines+markers",
             name=f"Move {move['id']}",
-            line=dict(width=width,color=colour),
-            marker=dict(size=7 if selected else 5,color=colour),
+            line=dict(width=width, color=colour),
+            marker=dict(size=7 if selected else 5, color=colour),
             opacity=opacity,
             hovertext=[p["label"] for p in points],
             hovertemplate="%{hovertext}<extra></extra>"
         ))
 
+    # Toggleable corporate exposure layers.
+    if show_offices:
+        add_reference_trace(fig, offices, "Office locations", "#38bdf8", "square", size=7)
+
+    tmp = pd.DataFrame(st.session_state.temporary_locations)
+    if show_temp_active:
+        add_reference_trace(fig, tmp[tmp["status"] == "Active"], "Temporary locations: active", "#14b8a6", "diamond", size=8)
+    if show_temp_archived:
+        add_reference_trace(fig, tmp[tmp["status"] == "Archived"], "Temporary locations: archived", "#64748b", "diamond-open", size=7)
+
+    # Toggleable MIDB reference layers.
+    if show_airports:
+        add_reference_trace(fig, midb_points[midb_points["type"] == "Airport"], "Airports", "#94a3b8", "triangle-up", size=7)
+    if show_ports:
+        add_reference_trace(fig, midb_points[midb_points["type"] == "Port"], "Ports", "#94a3b8", "circle-open", size=7)
+    if show_borders:
+        add_reference_trace(fig, midb_points[midb_points["type"] == "Border Crossing"], "Border crossings", "#94a3b8", "cross", size=7)
+    if show_diplomatic:
+        add_reference_trace(fig, midb_points[midb_points["type"] == "Diplomatic Outpost"], "Diplomatic outposts", "#94a3b8", "star", size=8)
+    if show_hospitals:
+        add_reference_trace(fig, midb_points[midb_points["type"] == "Hospital"], "Hospitals", "#94a3b8", "x", size=7)
+
+    # Staged route is optional but visible when building a move.
     if extra_route:
         fig.add_trace(go.Scattergeo(
             lon=[p["lon"] for p in extra_route],
             lat=[p["lat"] for p in extra_route],
             mode="lines+markers",
             name="Staged route",
-            line=dict(width=3,color="#67e8f9",dash="dot"),
-            marker=dict(size=9,color="#e0f2fe",symbol="circle-open"),
+            line=dict(width=3, color="#67e8f9", dash="dot"),
+            marker=dict(size=9, color="#e0f2fe", symbol="circle-open"),
             hovertext=[p["label"] for p in extra_route],
             hovertemplate="%{hovertext}<extra></extra>"
         ))
 
     center = dict(lat=18, lon=20)
     scale = 1
-
     if selected_move_id:
         move = next((m for m in st.session_state.moves if m["id"] == selected_move_id), None)
         if move:
@@ -465,10 +533,23 @@ def build_map(selected_move_id=None, extra_route=None):
 
 st.sidebar.title("Spectre")
 
-page = st.sidebar.radio(
-    "Workspace",
-    ["COP", "Monitor", "Risk"]
-)
+page = st.sidebar.radio("Workspace", ["COP", "Monitor", "Risk"])
+
+st.sidebar.divider()
+with st.sidebar.expander("Map Layers", expanded=True):
+    st.caption("Risks and monitored moves are always visible.")
+
+    st.markdown("**Corporate exposure**")
+    show_offices = st.checkbox("Office locations", value=True)
+    show_temp_active = st.checkbox("Temporary locations: active", value=True)
+    show_temp_archived = st.checkbox("Temporary locations: archived", value=False)
+
+    st.markdown("**MIDB reference layers**")
+    show_airports = st.checkbox("Airports", value=False)
+    show_ports = st.checkbox("Ports", value=False)
+    show_borders = st.checkbox("Border crossings", value=False)
+    show_diplomatic = st.checkbox("Diplomatic outposts", value=False)
+    show_hospitals = st.checkbox("Hospitals", value=False)
 
 # ---------------------------------------------------
 # COP
@@ -486,9 +567,7 @@ if page == "COP":
     <div class="hero">
         <div class="hero-kicker">Spectre COP</div>
         <div class="hero-title">Common Operations Picture</div>
-        <div class="hero-sub">
-        Validated operational picture displaying published risks and monitored moves.
-        </div>
+        <div class="hero-sub">Validated operational picture displaying published risks and monitored moves.</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -501,21 +580,38 @@ if page == "COP":
         metric("Informs", inform_count, "Awareness only")
 
     st.divider()
-
     st.subheader("Operational Map")
 
     move_table = moves_df()
     selected_move = None
-
     with st.expander("Focus map on monitored move"):
-        selected_move = st.selectbox(
-            "Select move",
-            ["None"] + move_table["Move ID"].tolist()
-        )
+        selected_move = st.selectbox("Select move", ["None"] + move_table["Move ID"].tolist())
         if selected_move == "None":
             selected_move = None
 
-    st.plotly_chart(build_map(selected_move_id=selected_move), use_container_width=True)
+    map_col, rail_col = st.columns([0.72, 0.28])
+
+    with map_col:
+        st.plotly_chart(build_map(selected_move_id=selected_move), use_container_width=True)
+
+    with rail_col:
+        st.subheader("Active Risks")
+        if len(published) == 0:
+            st.info("No active risks.")
+        else:
+            for _, risk in published.iterrows():
+                colour = {"Red":"#ef4444", "Amber":"#f59e0b", "Inform":"#60a5fa"}.get(risk["classification"], "#94a3b8")
+                action_text = {"Red":"Action underway", "Amber":"Monitoring and assessment", "Inform":"Awareness only"}.get(risk["classification"], "Monitoring")
+                st.markdown(f"""
+                <div class="risk-card" style="border-left:4px solid {colour};">
+                    <div style="color:{colour}; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em;">
+                        {risk['classification']} · {risk.get('source_type','External')}
+                    </div>
+                    <div style="color:white; font-weight:700; margin-top:4px;">{risk['city']}, {risk['country']}</div>
+                    <div style="color:#cbd5e1; font-size:13px; margin-top:4px;">{risk['title']}</div>
+                    <div style="color:#94a3b8; font-size:12px; margin-top:8px;">Action: {action_text}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
     st.subheader("Monitored Moves")
     st.caption("Read-only view of active monitored journeys. Managed in Monitor.")
@@ -531,9 +627,47 @@ elif page == "Monitor":
 
     top_left, top_right = st.columns([0.7, 0.3])
     with top_right:
-        create_internal = st.popover("Create Internal Event")
-        with create_internal:
-            st.write("Internal event creation remains available here. Use the move-management section below for monitored travel.")
+        with st.popover("Create Internal Event"):
+            st.markdown("### Create Internal Event")
+            st.caption("Create an operator-originated event. It can be published immediately or held in workflow.")
+
+            with st.form("create_internal_event_form"):
+                title = st.text_input("Event title", placeholder="e.g. Office report: protest near main entrance")
+                country = st.text_input("Country", placeholder="e.g. Kenya")
+                city = st.text_input("City", placeholder="e.g. Nairobi")
+                classification = st.selectbox("Classification", ["Red", "Amber", "Inform"])
+                origin = st.selectbox("Origin", ["Operator report", "Office phone report", "Staff alert", "Email report", "Security team report"])
+                summary = st.text_area("Summary", placeholder="Brief operational summary...")
+                coord = st.text_input("Primary coordinate or known place", placeholder="e.g. Nairobi or -1.2864, 36.8172")
+                publish_now = st.checkbox("Publish immediately to COP", value=True)
+
+                submitted = st.form_submit_button("Create internal event", type="primary")
+                if submitted:
+                    point, err = resolve_point(coord, label=city if city else "Internal event location")
+                    if not title or not country or not city or not summary:
+                        st.error("Add title, country, city and summary.")
+                    elif not point:
+                        st.error(err)
+                    else:
+                        new_event = {
+                            "id": "INT-" + str(uuid.uuid4())[:6].upper(),
+                            "source_type": "Internal",
+                            "title": title,
+                            "country": country,
+                            "city": city,
+                            "lat": point["lat"],
+                            "lon": point["lon"],
+                            "classification": classification,
+                            "origin": origin,
+                            "summary": summary,
+                            "published": publish_now,
+                            "created": datetime.utcnow().isoformat(),
+                            "status": "Published" if publish_now else "Workflow",
+                            "location_records": f"{point['label']} | {point['lat']:.6f}, {point['lon']:.6f} | Source: {point['source']}"
+                        }
+                        st.session_state.events.append(new_event)
+                        st.success("Internal event created.")
+                        st.rerun()
 
     workflow = pd.DataFrame([e for e in st.session_state.events if e["published"] == False])
     if len(workflow) == 0:
@@ -543,18 +677,14 @@ elif page == "Monitor":
 
     with left:
         st.subheader("Workflow Events")
-        selected = st.radio(
-            "Events",
-            workflow["id"].tolist(),
-            label_visibility="collapsed"
-        )
+        selected = st.radio("Events", workflow["id"].tolist(), label_visibility="collapsed")
         selected_event = workflow[workflow["id"] == selected].iloc[0]
 
         st.divider()
         st.subheader("Selected Event")
         st.markdown(pill(selected_event["classification"]), unsafe_allow_html=True)
         st.markdown(f"### {selected_event['title']}")
-        st.write(f"**Origin:** {selected_event['origin']}")
+        st.write(f"**Source:** {selected_event.get('source_type','External')} · {selected_event['origin']}")
         st.write(f"**Location:** {selected_event['city']}, {selected_event['country']}")
         st.markdown(f'<div class="small-note">{selected_event["summary"]}</div>', unsafe_allow_html=True)
 
@@ -565,13 +695,75 @@ elif page == "Monitor":
         t1,t2,t3 = st.tabs(["All Events","Locations","Monitored Moves"])
 
         with t1:
-            st.dataframe(pd.DataFrame(st.session_state.events)[["id","origin","title","country","classification","status","published"]], use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(st.session_state.events)[["id","source_type","origin","title","country","classification","status","published"]], use_container_width=True, hide_index=True)
 
         with t2:
             st.markdown("##### Offices")
             st.dataframe(offices, use_container_width=True, hide_index=True)
+
             st.markdown("##### Temporary Locations")
-            st.dataframe(temporary_locations, use_container_width=True, hide_index=True)
+            loc_tab1, loc_tab2, loc_tab3 = st.tabs(["Active", "Archived", "Add / Edit / Archive"])
+
+            temporary_locations = pd.DataFrame(st.session_state.temporary_locations)
+
+            with loc_tab1:
+                st.dataframe(temporary_locations[temporary_locations["status"] == "Active"], use_container_width=True, hide_index=True)
+
+            with loc_tab2:
+                st.dataframe(temporary_locations[temporary_locations["status"] == "Archived"], use_container_width=True, hide_index=True)
+
+            with loc_tab3:
+                existing_names = ["Create new"] + [x["name"] for x in st.session_state.temporary_locations]
+                selected_location_name = st.selectbox("Location record", existing_names)
+                existing = None
+                if selected_location_name != "Create new":
+                    existing = next((x for x in st.session_state.temporary_locations if x["name"] == selected_location_name), None)
+
+                with st.form("temporary_location_management_form"):
+                    loc_name = st.text_input("Location name", value=existing["name"] if existing else "")
+                    loc_country = st.text_input("Country", value=existing["country"] if existing else "")
+                    loc_city = st.text_input("City", value=existing.get("city", "") if existing else "")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        loc_start = st.text_input("Start date", value=existing["start"] if existing else "2026-05-14")
+                        loc_lat = st.number_input("Latitude", value=float(existing["lat"]) if existing else 0.0, format="%.6f")
+                    with c2:
+                        loc_end = st.text_input("End date", value=existing["end"] if existing else "2026-05-21")
+                        loc_lon = st.number_input("Longitude", value=float(existing["lon"]) if existing else 0.0, format="%.6f")
+                    loc_status = st.selectbox("Status", ["Active", "Archived"], index=0 if not existing or existing["status"] == "Active" else 1)
+                    loc_notes = st.text_area("Notes", value=existing.get("notes", "") if existing else "")
+                    save_location = st.form_submit_button("Save location", type="primary")
+
+                    if save_location:
+                        if not loc_name or not loc_country or not loc_city:
+                            st.error("Add name, country and city.")
+                        else:
+                            if existing:
+                                for x in st.session_state.temporary_locations:
+                                    if x["id"] == existing["id"]:
+                                        x.update({"name": loc_name, "country": loc_country, "city": loc_city, "start": loc_start, "end": loc_end, "lat": loc_lat, "lon": loc_lon, "status": loc_status, "notes": loc_notes})
+                                st.success("Temporary location updated.")
+                            else:
+                                st.session_state.temporary_locations.append({"id": "TMP-" + str(uuid.uuid4())[:6].upper(), "name": loc_name, "country": loc_country, "city": loc_city, "start": loc_start, "end": loc_end, "lat": loc_lat, "lon": loc_lon, "status": loc_status, "notes": loc_notes})
+                                st.success("Temporary location created.")
+                            st.rerun()
+
+                if existing:
+                    c_archive, c_restore = st.columns(2)
+                    with c_archive:
+                        if st.button("Archive selected location", use_container_width=True):
+                            for x in st.session_state.temporary_locations:
+                                if x["id"] == existing["id"]:
+                                    x["status"] = "Archived"
+                            st.success("Location archived.")
+                            st.rerun()
+                    with c_restore:
+                        if st.button("Restore selected location", use_container_width=True):
+                            for x in st.session_state.temporary_locations:
+                                if x["id"] == existing["id"]:
+                                    x["status"] = "Active"
+                            st.success("Location restored.")
+                            st.rerun()
 
         with t3:
             st.dataframe(moves_df(), use_container_width=True, hide_index=True)
@@ -594,17 +786,7 @@ elif page == "Monitor":
                     status = st.selectbox("Status", ["Planned","Active","Completed","Cancelled"])
                 saved_move_details = st.form_submit_button("Stage move details")
                 if saved_move_details:
-                    st.session_state.pending_move = {
-                        "traveller":traveller,
-                        "origin":origin,
-                        "destination":destination,
-                        "start_dtg":start_dtg,
-                        "end_dtg":end_dtg,
-                        "return_trip":return_trip,
-                        "poc":poc,
-                        "status":status,
-                        "mode":mode,
-                    }
+                    st.session_state.pending_move = {"traveller":traveller, "origin":origin, "destination":destination, "start_dtg":start_dtg, "end_dtg":end_dtg, "return_trip":return_trip, "poc":poc, "status":status, "mode":mode}
                     st.success("Move details staged. Add route points below.")
 
             st.markdown("#### Route Coordinates")
@@ -620,13 +802,8 @@ elif page == "Monitor":
                         st.success("Route point added.")
                     else:
                         st.error(err)
-
             else:
-                bulk = st.text_area(
-                    "Bulk route paste",
-                    placeholder="Origin, 51.4700, -0.4543\nTransit, 41.2753, 28.7519\nDestination, -1.3192, 36.9278\n\nOr use known places:\nHeathrow\nIstanbul Airport\nNairobi Airport",
-                    height=150
-                )
+                bulk = st.text_area("Bulk route paste", placeholder="Origin, 51.4700, -0.4543\nTransit, 41.2753, 28.7519\nDestination, -1.3192, 36.9278\n\nOr use known places:\nHeathrow\nIstanbul Airport\nNairobi Airport", height=150)
                 if st.button("Resolve bulk route"):
                     points, errors = parse_bulk_route(bulk)
                     st.session_state.staged_route_points.extend(points)
@@ -653,19 +830,7 @@ elif page == "Monitor":
                         elif len(st.session_state.staged_route_points) < 2:
                             st.error("Add at least an origin and destination point.")
                         else:
-                            st.session_state.moves.append({
-                                "id":"MOV-" + str(uuid.uuid4())[:6].upper(),
-                                "traveller":pending["traveller"],
-                                "origin":pending["origin"],
-                                "destination":pending["destination"],
-                                "start_dtg":pending["start_dtg"],
-                                "end_dtg":pending["end_dtg"],
-                                "return_trip":pending["return_trip"],
-                                "poc":pending["poc"],
-                                "status":pending["status"],
-                                "mode":pending["mode"],
-                                "route_points":st.session_state.staged_route_points.copy()
-                            })
+                            st.session_state.moves.append({"id":"MOV-" + str(uuid.uuid4())[:6].upper(), "traveller":pending["traveller"], "origin":pending["origin"], "destination":pending["destination"], "start_dtg":pending["start_dtg"], "end_dtg":pending["end_dtg"], "return_trip":pending["return_trip"], "poc":pending["poc"], "status":pending["status"], "mode":pending["mode"], "route_points":st.session_state.staged_route_points.copy()})
                             st.session_state.staged_route_points = []
                             st.session_state.pending_move = None
                             st.success("Monitored move created.")
@@ -697,6 +862,19 @@ elif page == "Monitor":
                     e["published"] = False
             st.success("Event discarded.")
 
+        st.divider()
+        st.subheader("Notification Email")
+        recipient = st.text_input("Recipient / distribution list", placeholder="e.g. country-security-distribution@example.com")
+        if recipient:
+            subject, body, mailto, map_link = build_notification_email(selected_event, classification, notes, recipient)
+            st.write(f"Subject: `{subject}`")
+            st.markdown(f"[Open event map]({map_link})")
+            st.markdown(f"[Open email draft]({mailto})")
+            with st.expander("Preview notification email"):
+                st.text(body)
+        else:
+            st.caption("Enter a recipient or distribution list to generate a mailto draft.")
+
 # ---------------------------------------------------
 # Risk
 # ---------------------------------------------------
@@ -715,9 +893,12 @@ else:
     st.subheader("Published Event Archive")
     archive = pd.DataFrame([e for e in st.session_state.events if e["published"] == True])
     if len(archive) > 0:
-        st.dataframe(archive[["id","title","country","origin","classification","created","summary"]], use_container_width=True, hide_index=True)
+        st.dataframe(archive[["id","source_type","title","country","origin","classification","created","summary"]], use_container_width=True, hide_index=True)
     else:
         st.info("No published events archived yet.")
 
     st.subheader("Monitored Move Archive")
     st.dataframe(moves_df(), use_container_width=True, hide_index=True)
+
+    st.subheader("MIDB Reference Coverage")
+    st.dataframe(midb_points, use_container_width=True, hide_index=True)
