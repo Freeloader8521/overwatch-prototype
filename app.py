@@ -237,6 +237,49 @@ if "temporary_locations" not in st.session_state:
 if "staged_route_points" not in st.session_state:
     st.session_state.staged_route_points = []
 
+
+# ---------------------------------------------------
+# Backwards compatibility / data normalisation
+# ---------------------------------------------------
+
+for event in st.session_state.events:
+    if "source_type" not in event:
+        origin = str(event.get("origin", "")).lower()
+        if any(term in origin for term in ["internal", "staff", "office", "operator", "email report", "security team"]):
+            event["source_type"] = "Internal"
+        else:
+            event["source_type"] = "External"
+
+    if "published" not in event:
+        event["published"] = False
+
+    if "status" not in event:
+        event["status"] = "Published" if event.get("published") else "Workflow"
+
+    if "location_records" not in event:
+        lat = event.get("lat", 0)
+        lon = event.get("lon", 0)
+        event["location_records"] = f"{event.get('city', 'Unknown')} | {lat}, {lon}"
+
+for move in st.session_state.moves:
+    if "route_points" not in move:
+        move["route_points"] = [
+            {"label": move.get("origin", "Origin"), "lat": 0, "lon": 0},
+            {"label": move.get("destination", "Destination"), "lat": 0, "lon": 0},
+        ]
+
+for loc in st.session_state.temporary_locations:
+    if "id" not in loc:
+        loc["id"] = "TMP-" + str(uuid.uuid4())[:6].upper()
+    if "city" not in loc:
+        loc["city"] = ""
+    if "lat" not in loc:
+        loc["lat"] = 0.0
+    if "lon" not in loc:
+        loc["lon"] = 0.0
+    if "notes" not in loc:
+        loc["notes"] = ""
+
 # ---------------------------------------------------
 # Data
 # ---------------------------------------------------
@@ -282,6 +325,15 @@ midb_points = pd.DataFrame([
 # ---------------------------------------------------
 # Helpers
 # ---------------------------------------------------
+
+
+def safe_dataframe(df, columns, **kwargs):
+    safe = df.copy()
+    for col in columns:
+        if col not in safe.columns:
+            safe[col] = ""
+    return st.dataframe(safe[columns], **kwargs)
+
 
 def metric(title, value, sub):
     st.markdown(f"""
@@ -533,6 +585,12 @@ def build_map(selected_move_id=None, extra_route=None):
 
 st.sidebar.title("Spectre")
 
+if st.sidebar.button("Reset demo data"):
+    for key in ["events", "moves", "temporary_locations", "staged_route_points"]:
+        if key in st.session_state:
+            del st.session_state[key]
+    st.rerun()
+
 page = st.sidebar.radio("Workspace", ["COP", "Monitor", "Risk"])
 
 st.sidebar.divider()
@@ -695,7 +753,12 @@ elif page == "Monitor":
         t1,t2,t3 = st.tabs(["All Events","Locations","Monitored Moves"])
 
         with t1:
-            st.dataframe(pd.DataFrame(st.session_state.events)[["id","source_type","origin","title","country","classification","status","published"]], use_container_width=True, hide_index=True)
+            safe_dataframe(
+                pd.DataFrame(st.session_state.events),
+                ["id","source_type","origin","title","country","classification","status","published"],
+                use_container_width=True,
+                hide_index=True
+            )
 
         with t2:
             st.markdown("##### Offices")
@@ -893,7 +956,12 @@ else:
     st.subheader("Published Event Archive")
     archive = pd.DataFrame([e for e in st.session_state.events if e["published"] == True])
     if len(archive) > 0:
-        st.dataframe(archive[["id","source_type","title","country","origin","classification","created","summary"]], use_container_width=True, hide_index=True)
+        safe_dataframe(
+            archive,
+            ["id","source_type","title","country","origin","classification","created","summary"],
+            use_container_width=True,
+            hide_index=True
+        )
     else:
         st.info("No published events archived yet.")
 
